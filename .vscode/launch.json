@@ -1,0 +1,82 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'matmatikal-api'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=matmatikal-api",
+                    "--package=matmatikal-api"
+                ],
+                "filter": {
+                    "name": "matmatikal-api",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'matmatikal-api'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=matmatikal-api",
+                    "--package=matmatikal-api"
+                ],
+                "filter": {
+                    "name": "matmatikal-api",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'Documents'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=Documents",
+                    "--package=Documents"
+                ],
+                "filter": {
+                    "name": "Documents",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'Documents'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=Documents",
+                    "--package=Documents"
+                ],
+                "filter": {
+                    "name": "Documents",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

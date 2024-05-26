@@ -4,6 +4,7 @@ use actix_cors::Cors;
 use actix_web::web;
 use actix_web::{http::header, App, HttpServer};
 use auth::google::google_login;
+use auth::login::login;
 use auth::register::register;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{self, ConnectionManager, Pool};
@@ -40,6 +41,7 @@ async fn main() -> std::io::Result<()> {
         .service(
             web::scope("/auth")
             .service(google_login)
+            .service(login)
             .service(register)
         )
     })
