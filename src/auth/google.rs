@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{schema::users::dsl::*, DbPool};
+use crate::{auth::login::jwt_response, schema::users::dsl::*, DbPool};
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use diesel::prelude::*;
 use jsonwebtoken::{
@@ -55,15 +55,6 @@ struct Date {
     day: u8,
 }
 
-#[derive(Deserialize)]
-struct Birthday {
-    date: Date,
-}
-
-#[derive(Deserialize)]
-struct PersonResponse {
-    birthdays: Vec<Birthday>,
-}
 
 #[get("/birthday")]
 pub async fn get_birthday(params: web::Query<BirthdayParams>) -> impl Responder {
@@ -90,27 +81,6 @@ struct TokenResponse {
     token_type: String,
     refresh_token: Option<String>,
 }
-
-// async fn exchange_code_for_token(code: &str) -> Result<TokenResponse, reqwest::Error> {
-//     let client = Client::new();
-//     let mut params = HashMap::new();
-//     params.insert("client_id", (*GOOGLE_CLIENT_ID).clone());
-//     params.insert("client_secret", (*GOOGLE_CLIENT_SECRET).clone());
-//     params.insert("code", code.to_string());
-//     params.insert("grant_type", "authorization_code".to_string());
-//     params.insert("redirect_uri", "http://localhost:4200".to_string());
-
-//     let response = client.post("https://oauth2.googleapis.com/token")
-//         .form(&params)
-//         .send()
-//         .await?.text().await;
-//     println!("{:?}", response);
-//     // .json::<TokenResponse>()
-//     // .await?;
-
-//     panic!()
-//     // Ok(response)
-// }
 
 fn extract_date(json: &Value) -> Option<Date> {
     println!("{}", json);
@@ -141,12 +111,12 @@ pub async fn google_login(
     let header = jsonwebtoken::decode_header(&credential).unwrap();
 
     let Some(kid) = header.kid else {
-        return panic!("Token doesn't have a `kid` header field");
+        panic!("Token doesn't have a `kid` header field");
     };
 
     let jwks: JwkSet = fetch_google_public_keys().await.expect("UH");
     let Some(jwk) = jwks.find(&kid) else {
-        return panic!("No matching JWK found for the given kid");
+        panic!("No matching JWK found for the given kid");
     };
 
     let decoding_key = match &jwk.algorithm {
@@ -166,16 +136,16 @@ pub async fn google_login(
 
         users
             .filter(email.eq(&credential_data.email))
-            .select(username)
-            .first::<String>(&mut conn)
+            .select((username, id))
+            .first::<(String, i32)>(&mut conn)
     })
     .await?;
 
-    let Ok(uname) = uname else {
+    let Ok((uname, uid)) = uname else {
         // user doesnt exist
         let gid = credential_data.sub;
         return Ok(HttpResponse::NotFound().json(json!({"gid": gid, "email": eml})));
     };
 
-    Ok(HttpResponse::Ok().json(uname))
+    Ok(jwt_response(uname, uid))
 }

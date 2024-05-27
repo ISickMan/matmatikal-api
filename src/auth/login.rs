@@ -1,5 +1,10 @@
-use actix_web::{post, web, HttpResponse, Responder};
-use jsonwebtoken::{encode, EncodingKey, Header};
+use actix_jwt_auth_middleware::FromRequest;
+use actix_web::{cookie::Cookie, post, web, HttpResponse, Responder};
+use chrono::Duration;
+use jwt_compact::{
+    alg::{Hs256, Hs256Key},
+    AlgorithmExt, Claims, Header, TimeOptions,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{schema::users::dsl::*, DbPool};
@@ -8,20 +13,21 @@ use diesel::prelude::*;
 use super::{register::password_hash, users::UserLoginWeb};
 
 lazy_static::lazy_static! {
-    pub static ref JWT_ENCODING_KEY : EncodingKey = EncodingKey::from_secret(dotenvy::var(
+    pub static ref JWT_ENCODING_KEY : Hs256Key = Hs256Key::from(dotenvy::var(
         "JWT_ENCODING_KEY"
     ).expect("MISSING JWT TOKEN ENCODER").as_bytes());
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Claims {
+#[derive(Debug, Serialize, Deserialize, Clone, FromRequest)]
+pub struct UserClaims {
     // aud: String,         // Optional. Audience
-    exp: usize, // Required (validate_exp defaults to true in validation). Expiration time (as UTC timestamp)
+    // pub exp: usize, // Required (validate_exp defaults to true in validation). Expiration time (as UTC timestamp)
     // iat: usize,          // Optional. Issued at (as UTC timestamp)
     // iss: String,         // Optional. Issuer
     // nbf: usize,          // Optional. Not Before (as UTC timestamp)
     // sub: String,         // Optional. Subject (whom token refers to)
-    username: String,
+    pub username: String,
+    pub id: i32,
 }
 
 #[post("/login")]
@@ -46,28 +52,50 @@ pub(crate) async fn login_internal(
 
         users
             .filter(email.eq(&creds.email).and(pass_hash.eq(&hash)))
-            .select(username)
-            .first::<String>(&mut conn)
+            .select((username, id))
+            .first::<(String, i32)>(&mut conn)
     })
     .await?;
 
-
-    // get current time in unix seconds
-    let expiration = chrono::Utc::now().timestamp() as usize + 60 * 60; // 1 hour expiration
-
-    let Ok(uname) = uname else {
+    let Ok((uname, uid)) = uname else {
         return Ok(HttpResponse::NotFound().json("Wrong credentials"));
     };
 
-    let jwt = encode(
-        &Header::default(),
-        &Claims {
-            exp: expiration,
-            username: uname,
-        },
-        &JWT_ENCODING_KEY,
-    )
-    .unwrap();
+    Ok(jwt_response(uname, uid))
+}
 
-    Ok(HttpResponse::Ok().json(jwt))
+pub fn jwt_response(uname: String, uid: i32) -> HttpResponse {
+    // get current time in unix seconds
+    let expiration = chrono::Utc::now().timestamp() as usize + 60 * 60; // 1 hour expiration
+
+    // let jwt = encode(
+    //     &Header::default(),
+    //     &Claims {
+    //         exp: expiration,
+    //         username: uname,
+    //         id: uid,
+    //     },
+    //     &JWT_ENCODING_KEY,
+    // )
+    // .unwrap();
+    let jwt = Hs256
+        .token(
+            &Header::empty(),
+            &Claims::new(UserClaims {
+                username: uname,
+                id: uid,
+            })
+            .set_duration(&TimeOptions::default(), Duration::days(7)),
+            &*JWT_ENCODING_KEY,
+        )
+        .unwrap();
+
+    let jwt_cookie = Cookie::build("jwt_token", jwt)
+        .domain("localhost")
+        .path("/")
+        // .secure(true)
+        .http_only(true)
+        .finish();
+
+    HttpResponse::Ok().cookie(jwt_cookie).finish()
 }

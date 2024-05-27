@@ -7,13 +7,16 @@ edition = "2021"
 
 [dependencies]
 actix-cors = "0.7.0"
+actix-jwt-auth-middleware = "0.5.0"
 actix-web = "4.5.1"
-chrono = "0.4.38"
+chrono = { version = "0.4.38", features = ["serde"] }
 derive_more = "0.99.17"
 diesel = { version = "2.1.6", features = ["postgres", "r2d2", "chrono"] }
 dotenvy = "0.15.7"
 hex = "0.4.3"
+iter_tools = "0.17.0"
 jsonwebtoken = "9.3.0"
+jwt-compact = "0.8.0"
 lazy_static = "1.4.0"
 reqwest = { version = "0.12.4", features = ["json"] }
 serde = { version = "1.0.201", features = ["derive"] }

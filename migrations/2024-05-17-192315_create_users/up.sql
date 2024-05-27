@@ -6,5 +6,6 @@ CREATE TABLE users (
   google_id VARCHAR,
   pass_hash VARCHAR NOT NULL,
   birthday DATE NOT NULL,
+  grade SMALLINT NOT NULL,
   creation_time TIMESTAMP WITH TIME ZONE NOT NULL
 )

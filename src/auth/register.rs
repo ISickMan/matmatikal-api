@@ -17,6 +17,7 @@ pub struct InsertUser<'a> {
     pass_hash: &'a str,
     birthday: NaiveDate,
     creation_time: DateTime<Utc>,
+    grade: i16,
 }
 
 pub fn password_hash(s: &str) -> String {
@@ -53,6 +54,7 @@ pub(crate) async fn register_internal(
             birthday: NaiveDate::from_ymd_opt(year, month, date).unwrap()
             /* .map_err(error::ErrorInternalServerError) */,
             creation_time: Utc::now(),
+            grade: user.grade,
         };
         
         let mut conn = pool.get().expect("couldn't get db connection from pool");
