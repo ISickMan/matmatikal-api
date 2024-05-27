@@ -3,7 +3,7 @@ pub mod auth;
 use actix_cors::Cors;
 use actix_web::web;
 use actix_web::{http::header, App, HttpServer};
-use auth::google::google_login;
+use auth::google::{get_birthday, google_login};
 use auth::login::login;
 use auth::register::register;
 use diesel::pg::PgConnection;
@@ -43,6 +43,7 @@ async fn main() -> std::io::Result<()> {
             .service(google_login)
             .service(login)
             .service(register)
+            .service(get_birthday)
         )
     })
     .bind(("127.0.0.1", 8080))?

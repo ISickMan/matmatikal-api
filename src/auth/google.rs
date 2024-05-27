@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{schema::users::dsl::*, DbPool};
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use diesel::prelude::*;
@@ -6,12 +8,25 @@ use jsonwebtoken::{
     Algorithm, DecodingKey, Validation,
 };
 use reqwest::Client;
-use serde::Deserialize;
-const CLIENT_ID: &'static str =
-    "794981933073-c59qh87r995625mjrk4iph5m89cd9s03.apps.googleusercontent.com";
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+
+lazy_static::lazy_static! {
+    static ref GOOGLE_CLIENT_ID: String =
+        dotenvy::var("GOOGLE_CLIENT_ID").unwrap();
+
+    static ref GOOGLE_API_KEY: String =
+        dotenvy::var("GOOGLE_API_KEY").unwrap();
+
+     static ref GOOGLE_CLIENT_SECRET: String =
+        dotenvy::var("GOOGLE_CLIENT_SECRET").unwrap();
+
+
+}
 
 #[derive(Debug, Deserialize)]
 struct GoogleLoginJwt {
+    sub: String,
     email: String,
     name: String,
 }
@@ -22,8 +37,95 @@ async fn fetch_google_public_keys() -> Option<JwkSet> {
         .send()
         .await
         .ok()?
-        .json().await
+        .json()
+        .await
         .ok()
+}
+
+#[derive(Deserialize)]
+struct BirthdayParams {
+    google_id: String,
+    code: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Date {
+    year: u16,
+    month: u8,
+    day: u8,
+}
+
+#[derive(Deserialize)]
+struct Birthday {
+    date: Date,
+}
+
+#[derive(Deserialize)]
+struct PersonResponse {
+    birthdays: Vec<Birthday>,
+}
+
+#[get("/birthday")]
+pub async fn get_birthday(params: web::Query<BirthdayParams>) -> impl Responder {
+    let access_token = &params.code;
+    let url = format!(
+        "https://people.googleapis.com/v1/people/{}?personFields=birthdays&key={}&access_token={}",
+        params.google_id, &*GOOGLE_API_KEY, access_token
+    );
+
+    HttpResponse::Ok().json(match fetch_person(&url).await {
+        Ok(json) => match extract_date(&json) {
+            Some(date) => json!(date),
+            None => json!("No birthday found"),
+        },
+        Err(err) => json!(format!("Error: {:?}", err)),
+    })
+}
+
+#[derive(Serialize, Deserialize)]
+struct TokenResponse {
+    access_token: String,
+    expires_in: u64,
+    scope: String,
+    token_type: String,
+    refresh_token: Option<String>,
+}
+
+// async fn exchange_code_for_token(code: &str) -> Result<TokenResponse, reqwest::Error> {
+//     let client = Client::new();
+//     let mut params = HashMap::new();
+//     params.insert("client_id", (*GOOGLE_CLIENT_ID).clone());
+//     params.insert("client_secret", (*GOOGLE_CLIENT_SECRET).clone());
+//     params.insert("code", code.to_string());
+//     params.insert("grant_type", "authorization_code".to_string());
+//     params.insert("redirect_uri", "http://localhost:4200".to_string());
+
+//     let response = client.post("https://oauth2.googleapis.com/token")
+//         .form(&params)
+//         .send()
+//         .await?.text().await;
+//     println!("{:?}", response);
+//     // .json::<TokenResponse>()
+//     // .await?;
+
+//     panic!()
+//     // Ok(response)
+// }
+
+fn extract_date(json: &Value) -> Option<Date> {
+    println!("{}", json);
+    json.get("birthdays")
+        .and_then(|birthdays| birthdays.as_array())
+        .and_then(|array| array.get(0))
+        .and_then(|bday| bday.get("date"))
+        .and_then(|date| serde_json::from_value(date.clone()).ok())
+}
+
+async fn fetch_person(url: &str) -> Result<Value, reqwest::Error> {
+    let client = Client::new();
+    let response = client.get(url).send().await?;
+    let json = response.json::<Value>().await?;
+    Ok(json)
 }
 
 #[post("/google-login")]
@@ -33,7 +135,7 @@ pub async fn google_login(
 ) -> actix_web::Result<impl Responder> {
     let mut validation = Validation::new(Algorithm::RS256);
     validation.set_issuer(&["https://accounts.google.com"]); // Issuer for Google One Tap
-    validation.set_audience(&[CLIENT_ID]);
+    validation.set_audience(&[&*GOOGLE_CLIENT_ID]);
 
     let credential = req_body;
     let header = jsonwebtoken::decode_header(&credential).unwrap();
@@ -56,6 +158,7 @@ pub async fn google_login(
         jsonwebtoken::decode::<GoogleLoginJwt>(&credential, &decoding_key, &validation)
             .unwrap()
             .claims;
+    let eml = credential_data.email.clone();
     println!("body: {:#?}", credential_data);
 
     let uname = web::block(move || {
@@ -70,8 +173,9 @@ pub async fn google_login(
 
     let Ok(uname) = uname else {
         // user doesnt exist
-        return Ok(HttpResponse::NotFound().json("doesn't exist"));
+        let gid = credential_data.sub;
+        return Ok(HttpResponse::NotFound().json(json!({"gid": gid, "email": eml})));
     };
 
-    Ok(HttpResponse::Ok().body(uname))
+    Ok(HttpResponse::Ok().json(uname))
 }
