@@ -3,8 +3,11 @@
 diesel::table! {
     sketches (id) {
         id -> Int4,
+        #[max_length = 255]
+        name -> Varchar,
         creator_id -> Int4,
         creation_time -> Timestamptz,
+        data -> Text,
     }
 }
 

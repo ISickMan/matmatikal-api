@@ -2,6 +2,7 @@ use actix_web::{get, post, web, HttpResponse};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use iter_tools::Itertools;
+use serde_json::Value;
 use ts_rs::TS;
 use crate::schema::sketches;
 use crate::schema::sketches::dsl::*;
@@ -11,10 +12,11 @@ use crate::DbPool;
 #[derive(Queryable, Identifiable, Selectable, Debug)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = sketches)]
-
 pub struct SketchDb {
     id: i32,
+    name: String,
     creator_id: i32,
+    data: String,
     creation_time: DateTime<Utc>
 }
 
@@ -23,6 +25,9 @@ pub struct SketchDb {
 #[ts(export)]
 pub struct Sketch {
     id: i32,
+    name: String,
+    #[ts(type = "any[]")]
+    data: Vec<Value>,
     creator: String,
     #[ts(type="number")]
     creation_time_unix: u64
@@ -49,7 +54,9 @@ pub async fn explore(
                 Sketch {
                     id: s.id,
                     creation_time_unix: s.creation_time.timestamp() as u64,
-                    creator
+                    name: s.name,
+                    data: serde_json::from_str(&s.data).unwrap(),
+                    creator,
                 }
             }).collect_vec()
         ),
