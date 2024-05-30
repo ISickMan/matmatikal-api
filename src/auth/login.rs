@@ -6,6 +6,7 @@ use jwt_compact::{
     AlgorithmExt, Claims, Header, TimeOptions,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use crate::{schema::users::dsl::*, DbPool};
 use diesel::prelude::*;
@@ -66,23 +67,12 @@ pub(crate) async fn login_internal(
 
 pub fn jwt_response(uname: String, uid: i32) -> HttpResponse {
     // get current time in unix seconds
-    let expiration = chrono::Utc::now().timestamp() as usize + 60 * 60; // 1 hour expiration
 
-    // let jwt = encode(
-    //     &Header::default(),
-    //     &Claims {
-    //         exp: expiration,
-    //         username: uname,
-    //         id: uid,
-    //     },
-    //     &JWT_ENCODING_KEY,
-    // )
-    // .unwrap();
     let jwt = Hs256
         .token(
             &Header::empty(),
             &Claims::new(UserClaims {
-                username: uname,
+                username: uname.clone(),
                 id: uid,
             })
             .set_duration(&TimeOptions::default(), Duration::days(7)),
@@ -97,5 +87,7 @@ pub fn jwt_response(uname: String, uid: i32) -> HttpResponse {
         .http_only(true)
         .finish();
 
-    HttpResponse::Ok().cookie(jwt_cookie).finish()
+    HttpResponse::Ok().cookie(jwt_cookie).json(json!( {
+        "username": uname
+    }))
 }

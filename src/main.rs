@@ -11,7 +11,7 @@ use auth::register::register;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{self, ConnectionManager, Pool};
 use jwt_compact::alg::Hs256;
-use sketches::explore::explore;
+use sketches::explore::{delete_sketch, explore};
 use sketches::upload::upload;
 mod schema;
 
@@ -68,10 +68,12 @@ async fn main() -> std::io::Result<()> {
             .service(register)
             .service(get_birthday)
             
-        ).use_jwt(authority,
-            web::scope("/sketches")
-                .service(upload)
-                .service(explore)
+        )
+        .use_jwt(authority,
+            web::scope("/sketches")        
+            .service(upload)
+            .service(explore)
+            .service(delete_sketch)
         )
     })
     .bind(("127.0.0.1", 8080))?

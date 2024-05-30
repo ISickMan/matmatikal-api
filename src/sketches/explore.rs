@@ -1,9 +1,10 @@
-use actix_web::{get, post, web, HttpResponse};
+use actix_web::{delete, get, post, web, HttpResponse};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use iter_tools::Itertools;
 use serde_json::Value;
 use ts_rs::TS;
+use crate::auth::login::UserClaims;
 use crate::schema::sketches;
 use crate::schema::sketches::dsl::*;
 use diesel::prelude::*;
@@ -67,3 +68,31 @@ pub async fn explore(
     })
 }
 
+#[delete("/delete/{id}")]
+pub async fn delete_sketch(
+    claims: UserClaims,
+    pool: web::Data<DbPool>,
+    sketch_id: web::Path<i32>
+) -> actix_web::Result<HttpResponse> {
+    let sketch_id = sketch_id.into_inner();
+
+    if &claims.username != "admin" {
+       return Ok(HttpResponse::Unauthorized().into()); 
+    }
+
+    let result: Result<usize, diesel::result::Error> = web::block(move || {
+        let mut conn = pool.get().expect("couldn't get db connection from pool");
+
+        diesel::delete(sketches.filter(id.eq(sketch_id)))
+            .execute(&mut conn)
+    }).await?;
+
+    Ok(match result {
+        Ok(count) if count > 0 => HttpResponse::Ok().json("Sketch deleted successfully"),
+        Ok(_) => HttpResponse::NotFound().json("Sketch not found"),
+        Err(e) => {
+            eprintln!("Failed to delete sketch {}", e);
+            HttpResponse::InternalServerError().json(e.to_string())
+        }
+    })
+}
