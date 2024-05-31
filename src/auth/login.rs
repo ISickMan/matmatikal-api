@@ -19,18 +19,6 @@ lazy_static::lazy_static! {
     ).expect("MISSING JWT TOKEN ENCODER").as_bytes());
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, FromRequest)]
-pub struct UserClaims {
-    // aud: String,         // Optional. Audience
-    // pub exp: usize, // Required (validate_exp defaults to true in validation). Expiration time (as UTC timestamp)
-    // iat: usize,          // Optional. Issued at (as UTC timestamp)
-    // iss: String,         // Optional. Issuer
-    // nbf: usize,          // Optional. Not Before (as UTC timestamp)
-    // sub: String,         // Optional. Subject (whom token refers to)
-    pub username: String,
-    pub id: i32,
-}
-
 #[post("/login")]
 pub async fn login(
     pool: web::Data<DbPool>,
@@ -38,10 +26,6 @@ pub async fn login(
 ) -> actix_web::Result<impl Responder> {
     login_internal(pool, creds.0).await
 }
-
-// pub async fn get_user_by_email(con: &mut PgConnection, email: &str) -> {
-
-// }
 
 pub(crate) async fn login_internal(
     pool: web::Data<DbPool>,
@@ -64,6 +48,14 @@ pub(crate) async fn login_internal(
 
     Ok(jwt_response(uname, uid))
 }
+
+
+#[derive(Debug, Serialize, Deserialize, Clone, FromRequest)]
+pub struct UserClaims {
+    pub username: String,
+    pub id: i32,
+}
+
 
 pub fn jwt_response(uname: String, uid: i32) -> HttpResponse {
     // get current time in unix seconds

@@ -31,30 +31,23 @@ type DbPool = r2d2::Pool<r2d2::ConnectionManager<PgConnection>>;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let pool =  get_connection_pool();
-    // let cors = Cors::default()
-    //     .allowed_origin("https://www.rust-lang.org")
-    //     .allowed_methods(vec!["GET", "POST"])
-    //     .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT])
-    //     .allowed_header(header::CONTENT_TYPE)
-    //     .max_age(3600);
-
+    let authority = Authority::new()
+        .refresh_authorizer(|| async move { Ok(()) })
+        .token_signer(Some(
+            TokenSigner::<UserClaims, Hs256>::new()
+                .signing_key((&*JWT_ENCODING_KEY).clone())
+                .algorithm(jwt_compact::alg::Hs256)
+                .build()
+                .expect(""),
+        ))
+        .verifying_key((&*JWT_ENCODING_KEY).clone())
+        .enable_cookie_tokens(true)
+        .access_token_name("jwt_token")
+        .build()
+        .expect("");
 
     HttpServer::new(move || {
         // wwww
-        let authority = Authority::new()
-            .refresh_authorizer(|| async move { Ok(()) })
-            .token_signer(Some(
-                TokenSigner::<UserClaims, Hs256>::new()
-                    .signing_key((&*JWT_ENCODING_KEY).clone())
-                    .algorithm(jwt_compact::alg::Hs256)
-                    .build()
-                    .expect(""),
-            ))
-            .verifying_key((&*JWT_ENCODING_KEY).clone())
-            .enable_cookie_tokens(true)
-            .access_token_name("jwt_token")
-            .build()
-            .expect("");
 
         let cors = Cors::permissive();
         
@@ -69,7 +62,7 @@ async fn main() -> std::io::Result<()> {
             .service(get_birthday)
             
         )
-        .use_jwt(authority,
+        .use_jwt(authority.clone(),
             web::scope("/sketches")        
             .service(upload)
             .service(explore)

@@ -13,7 +13,6 @@ use diesel::prelude::*;
 use crate::DbPool;
 
 #[derive(Queryable, Identifiable, Selectable, Associations, Debug)]
-// #[diesel(belongs_to(User, foreign_key= creator_id))]
 #[diesel(belongs_to(SketchGroupDb, foreign_key = sketch_group))]
 #[diesel(table_name = sketches)]
 pub struct SketchDb {
