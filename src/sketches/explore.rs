@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use actix_web::{delete, get, post, web, HttpResponse};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -5,20 +7,30 @@ use iter_tools::Itertools;
 use serde_json::Value;
 use ts_rs::TS;
 use crate::auth::login::UserClaims;
-use crate::schema::sketches;
+use crate::schema::{sketch_groups, sketches};
 use crate::schema::sketches::dsl::*;
 use diesel::prelude::*;
 use crate::DbPool;
 
-#[derive(Queryable, Identifiable, Selectable, Debug)]
-#[diesel(belongs_to(User))]
+#[derive(Queryable, Identifiable, Selectable, Associations, Debug)]
+// #[diesel(belongs_to(User, foreign_key= creator_id))]
+#[diesel(belongs_to(SketchGroupDb, foreign_key = sketch_group))]
 #[diesel(table_name = sketches)]
 pub struct SketchDb {
     id: i32,
     name: String,
     creator_id: i32,
     data: String,
-    creation_time: DateTime<Utc>
+    creation_time: DateTime<Utc>,
+    sketch_group: Option<i32>,
+}
+
+#[derive(Queryable, Identifiable, Debug)]
+#[diesel(table_name = sketch_groups)]
+pub struct SketchGroupDb {
+    id: i32,
+    name: String,
+    creator_id: i32,
 }
 
 #[derive(Serialize, Debug, TS)]
@@ -34,33 +46,44 @@ pub struct Sketch {
     creation_time_unix: u64
 }
 
+
 #[get("/explore")]
 pub async fn explore(
     pool: web::Data<DbPool>,
 ) -> actix_web::Result<HttpResponse> {
-    use crate::schema::users;
     use crate::schema::users::dsl::*;
+    use crate::schema::sketch_groups::dsl::*;
 
-    let sketches_vec: Result<Vec<(SketchDb, String)>, diesel::result::Error> = web::block(move || {
+    let sketches_with_groups: Result<Vec<(SketchDb, String, String)>, diesel::result::Error> = web::block(move || {
         let mut conn = pool.get().expect("couldn't get db connection from pool");
 
         sketches
-        // .limit(10)
-        .inner_join(users::table).select((SketchDb::as_select(), username)).load::<(SketchDb, String)>(&mut conn)
+            .inner_join(users)
+            .inner_join(sketch_groups)
+            .select((SketchDb::as_select(), username, name))
+            .load::<(SketchDb, String, String)>(&mut conn)
     }).await?;
 
-    Ok(match sketches_vec {
-        Ok(k) => HttpResponse::Ok().json(
-            k.into_iter().map(|(s, creator)| {
-                Sketch {
-                    id: s.id,
-                    creation_time_unix: s.creation_time.timestamp() as u64,
-                    name: s.name,
-                    data: serde_json::from_str(&s.data).unwrap(),
+    Ok(match sketches_with_groups {
+        Ok(results) => {
+            let mut grouped_sketches: HashMap<String, Vec<Sketch>> = HashMap::new();
+
+            for (sketch_db, creator, group_name) in results {
+                let sketch = Sketch {
+                    id: sketch_db.id,
+                    name: sketch_db.name,
+                    data: serde_json::from_str(&sketch_db.data).unwrap(),
                     creator,
-                }
-            }).collect_vec()
-        ),
+                    creation_time_unix: sketch_db.creation_time.timestamp() as u64,
+                };
+
+                grouped_sketches.entry(group_name)
+                    .or_insert_with(Vec::new)
+                    .push(sketch);
+            }
+
+            HttpResponse::Ok().json(grouped_sketches)
+        }
         Err(e) => {
             eprintln!("Failed to load sketches {}", e);
             HttpResponse::NotFound().json(e.to_string())

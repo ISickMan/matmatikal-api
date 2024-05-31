@@ -1,15 +1,6 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    sketch_group (id) {
-        id -> Int4,
-        #[max_length = 255]
-        name -> Varchar,
-        creator_id -> Int4,
-    }
-}
-
-diesel::table! {
     sketch_groups (id) {
         id -> Int4,
         #[max_length = 255]
@@ -43,13 +34,11 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(sketch_group -> users (creator_id));
 diesel::joinable!(sketch_groups -> users (creator_id));
 diesel::joinable!(sketches -> sketch_groups (sketch_group));
 diesel::joinable!(sketches -> users (creator_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
-    sketch_group,
     sketch_groups,
     sketches,
     users,
